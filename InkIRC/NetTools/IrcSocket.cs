@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 using System.Collections;
 using System.Net.Sockets;
 
@@ -25,7 +26,7 @@ namespace InkIRC.NetTools
         {
             mLog = pLog;
             OnSocketException += IrcSocket_OnSocketException;
-            OnDataReceived += IrcSocket_OnDataReceived;
+            //OnDataReceived += IrcSocket_OnDataReceived;
         }
 
         
@@ -137,14 +138,16 @@ namespace InkIRC.NetTools
             }
         }
 
-        void IrcSocket_OnDataReceived(byte[] pArray)
-        {
-            //just a test, to see if I'm getting data
-            foreach (byte dataByte in pArray)
-            {
-                mLog.Write(dataByte.ToString(), MessageType.Server);
-            }
-        }
+        //private void IrcSocket_OnDataReceived(byte[] pArray)
+        //{
+        //    string data = "";
+        //    //just a test, to see if I'm getting data
+        //    for (int i = 0; i < mReceivedDataLength; i++)
+        //    {
+        //        data += Encoding.ASCII.GetString(mSocketBuffer, 0, 64);
+        //    }
+        //    mLog.Write(data, MessageType.Server);
+        //}
 
         #endregion
 
