@@ -10,7 +10,6 @@ namespace InkIRC.NetTools
         private event SocketExceptionOccured OnSocketException;
 
         public string Host { get; set; }
-        public string SocketMessage { get; private set; }
         public ushort Port { get; set; }
 
         private LoggingTools.LogTool mLog;
@@ -35,7 +34,7 @@ namespace InkIRC.NetTools
             catch (Exception e)
             {
                 mSocket = null;
-                OnSocketException(SocketMessage = e.Message.ToString());            
+                OnSocketException(e.Message.ToString());            
                 return;
             }
         }
@@ -49,13 +48,13 @@ namespace InkIRC.NetTools
             catch (Exception e)
             {
                 mSocket = null;
-                OnSocketException(SocketMessage = e.ToString()); 
+                OnSocketException(e.ToString()); 
                 throw;
             }
         }
 
         void IrcSocket_OnSocketException(string pExceptionString)
-        {
+        { 
             if (!string.IsNullOrEmpty(pExceptionString)) mLog.Write(pExceptionString, MessageType.Error);
             
             mLog.Write("Attempt to reconnect? y/n", MessageType.Info);
