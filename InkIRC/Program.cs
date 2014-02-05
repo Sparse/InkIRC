@@ -14,6 +14,10 @@ namespace InkIRC
             NetTools.IrcSocket client = new NetTools.IrcSocket(log);
 
             log.Write("Welcome to InkIRC!!", MessageType.Welcome);
+            log.Write("Please input a host IP", MessageType.Welcome);
+            log.Write("Host: ", MessageType.Info);
+            client.Host = Console.ReadLine();
+            client.Port = 6667;
             client.Connect();
             Console.Read();         
         }
