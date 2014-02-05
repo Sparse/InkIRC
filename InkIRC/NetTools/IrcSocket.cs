@@ -13,8 +13,9 @@ namespace InkIRC.NetTools
         public string SocketMessage { get; private set; }
         public ushort Port { get; set; }
 
-        private Socket mSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         private LoggingTools.LogTool mLog;
+        private Socket mSocket;
+       
 
         public IrcSocket(LoggingTools.LogTool pLog)
         {
@@ -34,7 +35,7 @@ namespace InkIRC.NetTools
             catch (Exception e)
             {
                 mSocket = null;
-                OnSocketException(SocketMessage = e.ToString());            
+                OnSocketException(SocketMessage = e.Message.ToString());            
                 return;
             }
         }
@@ -48,15 +49,41 @@ namespace InkIRC.NetTools
             catch (Exception e)
             {
                 mSocket = null;
-                Connect();
-                SocketMessage = e.ToString(); 
+                OnSocketException(SocketMessage = e.ToString()); 
                 throw;
             }
         }
 
         void IrcSocket_OnSocketException(string pExceptionString)
         {
-            mLog.Write(pExceptionString, MessageType.Error);
+            if (!string.IsNullOrEmpty(pExceptionString)) mLog.Write(pExceptionString, MessageType.Error);
+            
+            mLog.Write("Attempt to reconnect? y/n", MessageType.Info);
+            string response = Console.ReadLine();
+            switch (response.ToLower())
+            {
+                case "y":
+                    Connect();
+                    break;
+                case "n":
+                    mLog.Write("Exiting", MessageType.Info);
+                    Console.Read();
+                    break;
+                case "yes":
+                    Connect();
+                    break;
+                case "no":
+                    mLog.Write("Exiting", MessageType.Info);
+                    Console.Read();
+                    break;
+                case "":
+                    Connect();
+                    break;
+                default:
+                    mLog.Write("Please input a proper response", MessageType.Warning);
+                    IrcSocket_OnSocketException(null);
+                    break;
+            }
         }
 
     }
