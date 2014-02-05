@@ -11,7 +11,7 @@ namespace InkIRC
         static void Main(string[] args)
         {
             LoggingTools.LogTool log = new LoggingTools.LogTool();
-            NetTools.IrcSocket client = new NetTools.IrcSocket();
+            NetTools.IrcSocket client = new NetTools.IrcSocket(log);
 
             log.Write("Welcome to InkIRC!!", MessageType.Welcome);
             client.Connect();

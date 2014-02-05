@@ -6,15 +6,21 @@ namespace InkIRC.NetTools
 {
     class IrcSocket
     {
-        public delegate void SocketExceptionOccured(IrcSocket pIrcSocket);
-        public event SocketExceptionOccured OnSocketException;
+        private delegate void SocketExceptionOccured(string pExceptionString);
+        private event SocketExceptionOccured OnSocketException;
 
         public string Host { get; set; }
         public string SocketMessage { get; private set; }
         public ushort Port { get; set; }
 
+        private Socket mSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        private LoggingTools.LogTool mLog;
 
-        private Socket mSocket;
+        public IrcSocket(LoggingTools.LogTool pLog)
+        {
+            mLog = pLog;
+            OnSocketException += IrcSocket_OnSocketException;
+        }
 
         public void Connect()
         {
@@ -27,8 +33,8 @@ namespace InkIRC.NetTools
             }
             catch (Exception e)
             {
-                OnSocketException(this);
-                SocketMessage = e.ToString();
+                mSocket = null;
+                OnSocketException(SocketMessage = e.ToString());            
                 return;
             }
         }
@@ -46,6 +52,11 @@ namespace InkIRC.NetTools
                 SocketMessage = e.ToString(); 
                 throw;
             }
+        }
+
+        void IrcSocket_OnSocketException(string pExceptionString)
+        {
+            mLog.Write(pExceptionString, MessageType.Error);
         }
 
     }
