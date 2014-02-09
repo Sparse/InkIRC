@@ -1,17 +1,18 @@
 ﻿using System;
 using System.Text;
 using System.Collections;
+using System.Collections.Generic;
 using System.Net.Sockets;
 
 namespace InkIRC.NetTools
 {
     class IrcSocket
     {
-        private delegate void SocketExceptionOccured(string pExceptionString);
-        private event SocketExceptionOccured OnSocketException;
-
         public delegate void ServerDataReceived(byte[] pArray);
-        public event ServerDataReceived OnDataReceived; 
+        public delegate void ConnectFailed(int pCode);
+        
+        public event ServerDataReceived OnDataReceived;
+        public event ConnectFailed OnConnectionFailed;
 
         public string Host { get; set; }
         public int Port { get; set; }
@@ -20,16 +21,11 @@ namespace InkIRC.NetTools
         private byte[] mSocketBuffer = new byte[64];
         private int mReceivedDataLength = 0;
         private Socket mSocket;
-       
 
         public IrcSocket(LoggingTools.LogTool pLog)
         {
             mLog = pLog;
-            OnSocketException += IrcSocket_OnSocketException;
-            //OnDataReceived += IrcSocket_OnDataReceived;
         }
-
-        
 
         public void Connect()
         {
@@ -43,8 +39,7 @@ namespace InkIRC.NetTools
             catch (Exception e)
             {
                 mSocket = null;
-                OnSocketException(e.Message.ToString());            
-                return;
+                Connect();
             }
         }
 
@@ -57,9 +52,34 @@ namespace InkIRC.NetTools
             }
             catch (Exception e)
             {
-                mSocket = null;
-                OnSocketException(e.ToString());
+                OnConnectionFailed(0);
                 return;
+                //mLog.Write(e.Message, MessageType.Error);
+                //mLog.Write("Connection to the specified host " + Host + " has failed", MessageType.Error);
+                //mLog.Write("Should I attempt to reconnect? y|n", MessageType.Info);
+
+                //string response = Console.ReadLine();
+
+                //switch (response)
+                //{
+                //    case "y":
+                //        mSocket = null;
+                //        OnConnectionFailed(1);
+                //        break;
+                //    case "n":
+                //        Environment.Exit(0);
+                //        break;
+                //    case "yes":
+                //        mSocket = null;
+                //        OnConnectionFailed(1);
+                //        break;
+                //    case "no":
+                //        Environment.Exit(0);
+                //        break;
+                //    default:
+                //        OnConnectionFailed(0);
+                //        break;
+                //}
             }
         }
 
@@ -70,84 +90,38 @@ namespace InkIRC.NetTools
 
         private void EndReceive(IAsyncResult pIAsyncResult)
         {
-            SocketError socketMessage;
             int receivedData;
             
             try
             {
-                receivedData = mSocket.EndReceive(pIAsyncResult, out socketMessage);
+                receivedData = mSocket.EndReceive(pIAsyncResult);
             }
             catch (Exception e)
             {
                 mSocket.Close();
-                mSocket = null;
-                OnSocketException(e.ToString());
+                mLog.Write(e.Message, MessageType.Error);
+                mSocket = null;                
                 return;
             }
 
             if (receivedData < 0)
             {                 
                 mSocket.Close();
-                mSocket = null;
-                OnSocketException(socketMessage.ToString());
+                mSocket = null;               
                 return;
             }
-
             mReceivedDataLength += receivedData;
             OnDataReceived(this.mSocketBuffer);
-            ConstructReceivedData();
             BeginReceive();
         }
 
-        private void ConstructReceivedData() //just a test method, later abstracted parsing will be implemented
-        {
 
-        }
+
+        
 
         #region Events
 
-        void IrcSocket_OnSocketException(string pExceptionString)
-        { 
-            if (!string.IsNullOrEmpty(pExceptionString)) mLog.Write(pExceptionString, MessageType.Error);
-            
-            mLog.Write("Attempt to reconnect? y/n", MessageType.Info);
-            string response = Console.ReadLine();
-            switch (response.ToLower())
-            {
-                case "y":
-                    Connect();
-                    break;
-                case "n":
-                    mLog.Write("Exiting", MessageType.Info);
-                    Console.Read();
-                    break;
-                case "yes":
-                    Connect();
-                    break;
-                case "no":
-                    mLog.Write("Exiting", MessageType.Info);
-                    Console.Read();
-                    break;
-                case "":
-                    Connect();
-                    break;
-                default:
-                    mLog.Write("Please input a proper response", MessageType.Warning);
-                    IrcSocket_OnSocketException(null);
-                    break;
-            }
-        }
-
-        //private void IrcSocket_OnDataReceived(byte[] pArray)
-        //{
-        //    string data = "";
-        //    //just a test, to see if I'm getting data
-        //    for (int i = 0; i < mReceivedDataLength; i++)
-        //    {
-        //        data += Encoding.ASCII.GetString(mSocketBuffer, 0, 64);
-        //    }
-        //    mLog.Write(data, MessageType.Server);
-        //}
+      
 
         #endregion
 

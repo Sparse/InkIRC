@@ -41,6 +41,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="IrcBot.cs" />
     <Compile Include="LoggingTools\LogTool.cs" />
     <Compile Include="LoggingTools\MessageType.cs" />
     <Compile Include="NetTools\IrcSocket.cs" />
