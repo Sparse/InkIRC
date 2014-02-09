@@ -8,17 +8,22 @@ namespace InkIRC.NetTools
 {
     class IrcSocket
     {
-        public delegate void ServerDataReceived(byte[] pArray);
-        public delegate void ConnectFailed(int pCode);
+        public delegate void ServerDataReceived(byte[] pArray, int pRecievedDataLength);
+        public delegate void ConnectFailed(int pCode); //pcode is just a place holder...later on, this will need to be expanded for reason codes.
+        public delegate void SocketDisconnect(); //need to pass something...
+        public delegate void ConnectionSucceded();
         
         public event ServerDataReceived OnDataReceived;
         public event ConnectFailed OnConnectionFailed;
+        public event SocketDisconnect OnDisconnect;
+        public event ConnectionSucceded OnConnected;
 
         public string Host { get; set; }
         public int Port { get; set; }
 
         private LoggingTools.LogTool mLog;
-        private byte[] mSocketBuffer = new byte[64];
+        private byte[] mSocketRecieveBuffer = new byte[512];
+        private byte[] mSocketSendBuffer = new byte[256];
         private int mReceivedDataLength = 0;
         private Socket mSocket;
 
@@ -39,6 +44,7 @@ namespace InkIRC.NetTools
             catch (Exception e)
             {
                 mSocket = null;
+                OnConnectionFailed(0);
                 Connect();
             }
         }
@@ -47,74 +53,61 @@ namespace InkIRC.NetTools
         {
             try
             {
-                 mSocket.EndConnect(pIAsyncResult);
-                 BeginReceive();
+                mSocket.EndConnect(pIAsyncResult);
+                OnConnected();
+                BeginReceive();
             }
             catch (Exception e)
             {
+                mSocket = null;
                 OnConnectionFailed(0);
-                return;
-                //mLog.Write(e.Message, MessageType.Error);
-                //mLog.Write("Connection to the specified host " + Host + " has failed", MessageType.Error);
-                //mLog.Write("Should I attempt to reconnect? y|n", MessageType.Info);
-
-                //string response = Console.ReadLine();
-
-                //switch (response)
-                //{
-                //    case "y":
-                //        mSocket = null;
-                //        OnConnectionFailed(1);
-                //        break;
-                //    case "n":
-                //        Environment.Exit(0);
-                //        break;
-                //    case "yes":
-                //        mSocket = null;
-                //        OnConnectionFailed(1);
-                //        break;
-                //    case "no":
-                //        Environment.Exit(0);
-                //        break;
-                //    default:
-                //        OnConnectionFailed(0);
-                //        break;
-                //}
             }
         }
 
         private void BeginReceive()
         {
-            mSocket.BeginReceive(mSocketBuffer, mReceivedDataLength, mSocketBuffer.Length - mReceivedDataLength, SocketFlags.None, EndReceive, null);
+            mSocket.BeginReceive(mSocketRecieveBuffer, mReceivedDataLength, mSocketRecieveBuffer.Length - mReceivedDataLength, SocketFlags.None, EndReceive, null);
         }
 
         private void EndReceive(IAsyncResult pIAsyncResult)
         {
             int receivedData;
-            
-            try
-            {
-                receivedData = mSocket.EndReceive(pIAsyncResult);
-            }
-            catch (Exception e)
-            {
+            SocketError dataError;
+           
+            receivedData = mSocket.EndReceive(pIAsyncResult, out dataError);
+            if (receivedData <= 0)
+            {                 
                 mSocket.Close();
-                mLog.Write(e.Message, MessageType.Error);
-                mSocket = null;                
+                mSocket = null;
+                OnConnectionFailed(0);//the numbers are going to be reason codes...eventually
+                mLog.Write(dataError.ToString(), MessageType.Error);
                 return;
             }
 
-            if (receivedData < 0)
-            {                 
-                mSocket.Close();
-                mSocket = null;               
-                return;
-            }
             mReceivedDataLength += receivedData;
-            OnDataReceived(this.mSocketBuffer);
+            OnDataReceived(this.mSocketRecieveBuffer, mReceivedDataLength);
             BeginReceive();
         }
 
+        public void Send(byte[] pData)
+        {
+            mSocketSendBuffer = pData;
+            Buffer.BlockCopy(pData, 0, mSocketSendBuffer, 0, pData.Length);
+            mSocket.BeginSend(mSocketSendBuffer, 0, mSocketSendBuffer.Length, SocketFlags.None, EndSend, null);
+        }
+
+        private void EndSend(IAsyncResult pIAsyncResult)
+        {
+            SocketError sendError;
+            try
+            {
+                mSocket.EndSend(pIAsyncResult, out sendError);
+            }
+            catch (Exception)
+            {
+                OnDisconnect();                
+            }
+        }
 
 
         
