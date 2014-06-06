@@ -10,8 +10,11 @@ namespace InkIRC
 
     class IrcBot
     {
-        public delegate void PingRecieved(string pPing);
-        public event PingRecieved OnPingRecieved;
+        private delegate void PingReceived(string pPingToken);
+        private delegate void CommandReceived(string pCommand);
+
+        private event PingReceived OnPingRecieved;
+        private event CommandReceived OnCommandReceived;
 
         public LoggingTools.LogTool Log = new LoggingTools.LogTool();
         public NetTools.IrcSocket ClientSocket;
@@ -36,10 +39,13 @@ namespace InkIRC
             Log.Write("Please input a host IP", MessageType.Welcome);
             Log.Write("Host: ", MessageType.Info);
             ClientSocket = new NetTools.IrcSocket(Log);
-            ClientSocket.OnDataReceived += clientSocket_OnDataReceived;
+
             ClientSocket.OnConnectionFailed += clientSocket_OnConnectionFailed;
             ClientSocket.OnDisconnect += ClientSocket_OnDisconnect;
             ClientSocket.OnConnected += ClientSocket_OnConnected;
+            ClientSocket.ValidMessageFound += ClientSocket_ValidMessageFound;
+            this.OnPingRecieved += IrcBot_OnPingRecieved;
+            this.OnCommandReceived += IrcBot_OnCommandReceived;
             ClientSocket.Host = Console.ReadLine();
             ClientSocket.Port = 6667;
             mHost = ClientSocket.Host;
@@ -48,63 +54,29 @@ namespace InkIRC
             //while loop for getting data from the console, eventually
         }
 
-        
-
         private void Restart()
         {
             ClientSocket = new NetTools.IrcSocket(Log);
             ClientSocket.Host = mHost;
             ClientSocket.Port = mPort;
-            ClientSocket.OnDataReceived += clientSocket_OnDataReceived;
-            ClientSocket.OnConnectionFailed += clientSocket_OnConnectionFailed;
             ClientSocket.Connect();
         }
-
-        private static int FindLineTerminator(byte[] pArray, int pStart, int pDataLength, ref int pEOLLength)
-        {
-            if (pDataLength <= 1) return -1;
-            for (int index = 0; index < (pDataLength - 1); ++index)
-            {
-                if (pArray[pStart + index] == '\n' || (pArray[pStart + index] == '\r' && pArray[pStart + index + 1] == '\n'))
-                {
-                    pEOLLength = 1;
-                    if (pArray[pStart + index] == '\r') ++pEOLLength;
-                    return pStart + index;
-                }
-            }
-            return -1;
-        }
-
       
-        #region EventHandlers
+        #region EventHandlersSocketBased
 
         void ClientSocket_OnConnected()
         {
-            Thread.Sleep(1000);
-            ClientSocket.Send(Encoding.ASCII.GetBytes("USER InkIRC 8 * :InkIRC"));
-            ClientSocket.Send(Encoding.ASCII.GetBytes("NICK InkBot"));
+            ClientSocket.Send(Encoding.ASCII.GetBytes("USER InkIRC 8 * :InkIRC\r\n"));
+            ClientSocket.Send(Encoding.ASCII.GetBytes("NICK InkBot\r\n"));
         } 
 
-        void ClientSocket_OnDisconnect()
+        void ClientSocket_OnDisconnect(string pSocketError)
         {
-            throw new NotImplementedException(); //fuck it, worry about it later...
-        }
-
-        private void clientSocket_OnDataReceived(byte[] pArray, int pRecievedDataLength)
-        {
-            do // This kind of loop, means it will ALWAYS run once, before testing the while condition at the end
-            {
-                int eolLength = 0; // eol terminator length
-                int eol = FindLineTerminator(pArray, 0, pRecievedDataLength, ref eolLength); // Find the end of line, and obtain the length of the eol terminator
-                if (eol < 0) break; // If there is no end of line, bail out, and wait for more data
-                string line = Encoding.ASCII.GetString(pArray, 0, eol); // Convert the bytes to ASCII string, upto eol (end of line, before terminators, can be 0 if it's an empty line)
-                Log.Write(line, MessageType.Server); // Pass off the message to the event, don't care what happens now, just cleanup buffer for next line after this
-                pRecievedDataLength -= (eol + eolLength); // Remove length of line, plus length of line terminator, so we start at the next line
-                if (pRecievedDataLength > 0) Buffer.BlockCopy(pArray, (eol + eolLength), pArray, 0, pRecievedDataLength); // If we didn't use all the data, copy what's left to the start
-            } while (pRecievedDataLength > 0); // If there is still data, after parsing a line, try to parse another
-        }
-
-        
+            Log.Write(pSocketError, MessageType.Error);
+            ClientSocket.IrcConnectionSocket.Close();
+            ClientSocket = null;
+            Restart();
+        }        
 
         private void clientSocket_OnConnectionFailed(int pCode)
         {
@@ -141,8 +113,61 @@ namespace InkIRC
             }
         }
 
+        void ClientSocket_ValidMessageFound()
+        {
+            StringBuilder decodedMessage = new StringBuilder();
+            string message = ClientSocket.MessageQueue.Dequeue();
+            string prefix;
+            string command;
+            string param;
+            string trailer;
+            int commandEnd;
+            int prefixEnd;
+            //parse prefix, if exists
+            if (message.IndexOf(":") == 0)
+            {
+                prefixEnd = message.IndexOf(" ");
+                prefix = message.Substring(0, prefixEnd);
+                message = message.Substring(prefixEnd, message.Length - prefixEnd);
+            }
 
+            commandEnd = message.IndexOf(" ");
+            command = message.Substring(0, commandEnd);
+            if (command == "PING")
+            {
+                int pingTokenLocation = message.IndexOf(" :");
+                OnPingRecieved(message.Substring(pingTokenLocation, message.Length - pingTokenLocation));
+            }
+            else
+            {
+                OnCommandReceived(command);
+            }
+            decodedMessage.Append(message);
+            Console.WriteLine(decodedMessage.ToString());
+          
+        }
         #endregion
+
+        #region EventHandlersClientBased
+
+        void IrcBot_OnPingRecieved(string pPingToken)
+        {
+            ClientSocket.Send(Encoding.ASCII.GetBytes("PONG" + pPingToken + "\r\n"));
+        }
+
+        void IrcBot_OnCommandReceived(string pCommand)
+        {
+            switch (pCommand)
+            {
+                case "451":
+                    Log.Write("Error 451 encountered", MessageType.Info);
+                    break;
+                default:
+                    break;
+            }
+        }
+        #endregion
+
 
 
     }
